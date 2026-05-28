@@ -145,7 +145,7 @@
     var TOKEN = 'KIOSK_87898cdd44c9e7a2f459379be74a5681';
 
     var currentEmp = null, currentMode = 'QR';
-    var html5QrCode = null, scannerRunning = false;
+    var html5QrCode = null, scannerRunning = false, scannerBusy = false;
     var lastScan = '', lastScanTime = 0, toastTimer = null;
 
     function updateClock() {
@@ -161,10 +161,12 @@
     function escapeHtml(s){ if(s==null)return''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
     // ===== 카메라 (전면 전용) =====
-    // 스캔영역을 카메라 영상 전체로 → QR이 화면 어디에 있든, 일부만 걸쳐도 인식.
-    // qrbox에 영상의 실제 크기를 그대로 반환 = 잘라내기 영역이 곧 전체 화면.
+    // 스캔영역을 카메라 영상 거의 전체로 → 화면 어디든 일부만 걸쳐도 인식.
     function qrboxFn(vw, vh) {
-      return { width: vw, height: vh };
+      // 영상의 98% (아주 약간 여유를 둬야 일부 버전에서 시작 실패 안 함)
+      var w = Math.floor(vw * 0.98);
+      var h = Math.floor(vh * 0.98);
+      return { width: w, height: h };
     }
 
     var scanConfig = {
@@ -175,7 +177,8 @@
     };
 
     function startScanner() {
-      if (scannerRunning) return;
+      if (scannerRunning || scannerBusy) return;  // 이미 켜졌거나 처리 중이면 무시
+      scannerBusy = true;
       if (!html5QrCode) html5QrCode = new Html5Qrcode("qrReader");
       html5QrCode.start(
         { facingMode: "user", width:{ideal:1280}, height:{ideal:960} },
@@ -183,14 +186,17 @@
         function(t){ handleScan(t); }, function(){}
       ).then(function(){
         scannerRunning = true;
+        scannerBusy = false;
       }).catch(function(err){
         setTimeout(function(){
           html5QrCode.start({ facingMode:"user" }, scanConfig,
             function(t){ handleScan(t); }, function(){}
-          ).then(function(){ scannerRunning=true; })
-           .catch(function(err2){
-             showErr('카메라를 시작할 수 없습니다.\n권한 허용 후 [카메라 다시 시작]을 눌러주세요.\n\n'+(err2||err));
-           });
+          ).then(function(){
+            scannerRunning = true; scannerBusy = false;
+          }).catch(function(err2){
+            scannerBusy = false;
+            showErr('카메라를 시작할 수 없습니다.\n권한 허용 후 [카메라 다시 시작]을 눌러주세요.\n\n'+(err2||err));
+          });
         }, 600);
       });
     }
@@ -203,12 +209,16 @@
     }
     // 다시 시작: 정지가 완전히 끝난 뒤에 시작
     function restartScanner() {
+      if (scannerBusy) return;  // 처리 중이면 무시
       if (html5QrCode && scannerRunning) {
+        scannerBusy = true;
         scannerRunning = false;
         html5QrCode.stop().then(function(){
-          setTimeout(startScanner, 400);
+          scannerBusy = false;
+          setTimeout(startScanner, 500);
         }).catch(function(){
-          setTimeout(startScanner, 400);
+          scannerBusy = false;
+          setTimeout(startScanner, 500);
         });
       } else {
         startScanner();
