@@ -161,10 +161,11 @@
     function escapeHtml(s){ if(s==null)return''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
     // ===== 카메라 (전면 전용) =====
-    // qrbox를 지정하지 않으면 스캔 박스 제한 없이 카메라 화면 전체에서 QR을 찾는다.
-    // → 작은 네모에 맞출 필요 없이, 화면 어디에 QR이 있든 인식.
+    // qrbox를 큰 고정값으로 → 화면 대부분이 스캔영역이라 위치 안 맞춰도 인식되고,
+    // 박스가 정의돼 있어 디코딩은 정상 동작 (완전히 빼면 인식 안 되는 버전 있음).
     var scanConfig = {
       fps: 10,
+      qrbox: { width: 600, height: 600 },
       aspectRatio: 1.0,
       disableFlip: false
     };
