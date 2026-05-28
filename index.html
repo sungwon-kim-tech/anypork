@@ -161,12 +161,14 @@
     function escapeHtml(s){ if(s==null)return''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
     // ===== 카메라 (전면 전용) =====
-    // qrbox를 적정 크기로 (너무 크면 디코더가 화면 전체를 훑어 인식 안 됨).
-    // 화면 짧은 변의 60%, 250~350px 범위로 제한 → QR이 이 안에 차면 빠르게 인식.
+    // 원거리 인식 균형점:
+    //  - qrbox 70% (멀리 있는 작은 QR도 영역 안에 들어옴)
+    //  - 고해상도 요청 (멀수록 해상도가 인식의 관건)
+    //  - 고속 디코더(BarcodeDetector) 사용
     function qrboxFn(vw, vh) {
-      var size = Math.floor(Math.min(vw, vh) * 0.6);
-      if (size > 350) size = 350;
-      if (size < 200) size = 200;
+      var size = Math.floor(Math.min(vw, vh) * 0.7);
+      if (size > 400) size = 400;
+      if (size < 220) size = 220;
       return { width: size, height: size };
     }
 
@@ -175,20 +177,38 @@
       qrbox: qrboxFn,
       aspectRatio: 1.0,
       disableFlip: false,
-      // 기기 내장 고속 디코더 우선 사용 (인식 속도 대폭 향상)
       useBarCodeDetectorIfSupported: true,
-      experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+      experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+      videoConstraints: {
+        facingMode: "user",
+        width:  { ideal: 1920 },
+        height: { ideal: 1080 }
+      }
     };
 
     function startScanner() {
       if (scannerRunning) return;
       if (!html5QrCode) html5QrCode = new Html5Qrcode("qrReader", { useBarCodeDetectorIfSupported: true });
-      html5QrCode.start({ facingMode: "user" }, scanConfig,
+      // 고해상도 우선, 실패 시 기본 전면으로
+      html5QrCode.start(
+        { facingMode: "user", width:{ideal:1920}, height:{ideal:1080} },
+        scanConfig,
         function(t){ handleScan(t); }, function(){}
       ).then(function(){
         scannerRunning = true;
       }).catch(function(err){
-        showErr('카메라를 시작할 수 없습니다.\n권한을 허용했는지 확인 후 [카메라 다시 시작]을 눌러주세요.\n\n' + err);
+        // 고해상도 실패 → 잠시 후 기본 설정으로 재시도
+        setTimeout(function(){
+          html5QrCode.start(
+            { facingMode: "user" },
+            { fps:25, qrbox: qrboxFn, aspectRatio:1.0, disableFlip:false, useBarCodeDetectorIfSupported:true },
+            function(t){ handleScan(t); }, function(){}
+          ).then(function(){
+            scannerRunning = true;
+          }).catch(function(err2){
+            showErr('카메라를 시작할 수 없습니다.\n권한을 허용했는지 확인 후 [카메라 다시 시작]을 눌러주세요.\n\n' + (err2 || err));
+          });
+        }, 600);
       });
     }
     function stopScanner() {
