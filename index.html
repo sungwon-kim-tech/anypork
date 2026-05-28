@@ -161,10 +161,10 @@
     function escapeHtml(s){ if(s==null)return''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
     // ===== 카메라 (전면 전용) =====
-    // 스캔영역: 고정 크기 (함수형 qrbox가 이 기기에서 전환충돌 유발 → 숫자로)
+    // qrbox를 지정하지 않으면 스캔 박스 제한 없이 카메라 화면 전체에서 QR을 찾는다.
+    // → 작은 네모에 맞출 필요 없이, 화면 어디에 QR이 있든 인식.
     var scanConfig = {
       fps: 10,
-      qrbox: 250,
       aspectRatio: 1.0,
       disableFlip: false
     };
