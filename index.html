@@ -27,7 +27,7 @@
     }
     .card .title { text-align:center; font-size:1.1rem; font-weight:800; color:#14532d; margin-bottom:6px; }
     .card .sub { text-align:center; font-size:0.85rem; color:#6b7280; margin-bottom:16px; }
-    #qrReader { border-radius:12px; overflow:hidden; background:#000; }
+    #qrReader { border-radius:12px; overflow:hidden; background:#000; min-height:300px; }
     #qrReader video { border-radius:12px; }
     #qrReader__dashboard_section_swaplink { display:none !important; }
 
@@ -343,7 +343,25 @@
       if (toastTimer) clearTimeout(toastTimer);
     }
 
-    window.onload = function(){ setTimeout(startScanner,500); };
+    // 전역 에러를 잡아 화면에 표시 (원인 진단용)
+    window.addEventListener('error', function(ev){
+      var m = (ev && ev.message) ? ev.message : String(ev);
+      // 라이브러리 내부 전환 경고는 무시 (카메라는 결국 뜸)
+      if (m.indexOf('transition') !== -1) return;
+      // 그 외 에러만 표시
+      // showErr('오류: ' + m);
+    });
+
+    function bootScanner() {
+      // 라이브러리가 로드됐는지 확인 후 시작
+      if (typeof Html5Qrcode === 'undefined') {
+        setTimeout(bootScanner, 300);
+        return;
+      }
+      startScanner();
+    }
+
+    window.onload = function(){ setTimeout(bootScanner, 800); };
   </script>
 </body>
 </html>
