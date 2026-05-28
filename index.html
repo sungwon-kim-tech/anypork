@@ -161,14 +161,10 @@
     function escapeHtml(s){ if(s==null)return''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
     // ===== 카메라 (전면 전용) =====
-    // 전면 카메라 인식 최적화:
-    //  - 적정 해상도(1280) 요청: QR이 또렷하게 잡힘
-    //  - qrbox 80%: 화면 대부분이 스캔영역 → 위치 안 맞춰도 됨
-    //  - 라이브러리 기본 디코더 (이 기기에서 가장 정확)
+    // 스캔영역을 카메라 영상 전체로 → QR이 화면 어디에 있든, 일부만 걸쳐도 인식.
+    // qrbox에 영상의 실제 크기를 그대로 반환 = 잘라내기 영역이 곧 전체 화면.
     function qrboxFn(vw, vh) {
-      var size = Math.floor(Math.min(vw, vh) * 0.8);
-      if (size < 200) size = 200;
-      return { width: size, height: size };
+      return { width: vw, height: vh };
     }
 
     var scanConfig = {
@@ -181,7 +177,6 @@
     function startScanner() {
       if (scannerRunning) return;
       if (!html5QrCode) html5QrCode = new Html5Qrcode("qrReader");
-      // 적정 해상도 전면 카메라
       html5QrCode.start(
         { facingMode: "user", width:{ideal:1280}, height:{ideal:960} },
         scanConfig,
