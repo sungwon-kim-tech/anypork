@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>출퇴근 QR 스캔</title>
+  <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+    body {
+      margin:0; font-family:'Malgun Gothic',sans-serif; color:#fff;
+      background:linear-gradient(135deg,#14532d 0%,#166534 50%,#15803d 100%);
+      min-height:100vh; overflow-x:hidden; user-select:none;
+    }
+    .header {
+      background:rgba(0,0,0,0.25); padding:14px 20px;
+      display:flex; justify-content:space-between; align-items:center;
+    }
+    .header h1 { font-size:1.3rem; font-weight:800; margin:0; letter-spacing:0.05em; }
+    .clock { font-size:1.2rem; font-weight:700; font-variant-numeric:tabular-nums; }
+    .date { font-size:0.8rem; opacity:0.85; text-align:right; margin-top:2px; }
+
+    .wrap { max-width:500px; margin:20px auto; padding:0 16px; }
+    .card {
+      background:#fff; border-radius:20px; padding:20px; color:#1f2937;
+      box-shadow:0 8px 24px rgba(0,0,0,0.25);
+    }
+    .card .title { text-align:center; font-size:1.1rem; font-weight:800; color:#14532d; margin-bottom:6px; }
+    .card .sub { text-align:center; font-size:0.85rem; color:#6b7280; margin-bottom:16px; }
+    #qrReader { border-radius:12px; overflow:hidden; background:#000; }
+    #qrReader video { border-radius:12px; }
+    #qrReader__dashboard_section_swaplink { display:none !important; }
+
+    .restart {
+      width:100%; margin-top:14px; padding:10px; border:1px solid #15803d;
+      background:#fff; color:#15803d; font-weight:700; border-radius:10px; cursor:pointer;
+    }
+
+    .manual {
+      background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2);
+      border-radius:14px; padding:16px; margin-top:16px;
+    }
+    .manual label { font-size:0.85rem; font-weight:600; display:block; margin-bottom:8px; }
+    .manual input {
+      width:100%; padding:12px 14px; font-size:1.05rem; font-weight:700;
+      border:none; border-radius:10px; outline:none; font-variant-numeric:tabular-nums;
+    }
+    .manual button {
+      width:100%; margin-top:8px; padding:10px; font-weight:700; border:none;
+      border-radius:10px; background:rgba(255,255,255,0.95); color:#14532d; cursor:pointer;
+    }
+
+    .overlay {
+      position:fixed; inset:0; background:rgba(0,0,0,0.55);
+      display:none; align-items:center; justify-content:center; z-index:100;
+    }
+    .modal {
+      background:#fff; color:#1f2937; border-radius:20px; width:90%; max-width:360px; overflow:hidden;
+    }
+    .modal .mhead { background:#14532d; color:#fff; padding:20px; text-align:center; }
+    .modal .mname { font-size:1.8rem; font-weight:800; }
+    .modal .minfo { font-size:0.9rem; opacity:0.85; margin-top:6px; }
+    .modal .mtime { font-size:0.95rem; opacity:0.85; margin-top:4px; }
+    .modal .mbody { padding:24px 20px; display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+    .bigbtn {
+      padding:30px 10px; font-size:1.5rem; font-weight:800; border:none;
+      border-radius:14px; color:#fff; cursor:pointer; letter-spacing:0.05em;
+    }
+    .bigbtn:active { transform:scale(0.95); opacity:0.85; }
+    .b-in { background:linear-gradient(135deg,#16a34a,#15803d); }
+    .b-out { background:linear-gradient(135deg,#dc2626,#b91c1c); }
+    .b-away { grid-column:1/-1; background:linear-gradient(135deg,#f59e0b,#d97706); padding:20px; font-size:1.3rem; }
+    .mcancel {
+      width:100%; padding:12px; background:#e5e7eb; color:#4b5563;
+      border:none; font-size:1rem; font-weight:700; cursor:pointer;
+    }
+
+    .toast {
+      position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+      background:rgba(255,255,255,0.98); padding:32px 40px; border-radius:20px;
+      box-shadow:0 10px 40px rgba(0,0,0,0.4); z-index:200; text-align:center; min-width:280px;
+      display:none;
+    }
+    .toast .icon { font-size:3.5rem; margin-bottom:10px; }
+    .toast .tname { font-size:1.6rem; font-weight:800; color:#14532d; }
+    .toast .tmsg { font-size:1.1rem; margin-top:4px; font-weight:700; }
+    .toast .tmsg.in { color:#15803d; } .toast .tmsg.out { color:#b91c1c; } .toast .tmsg.away { color:#d97706; }
+    .toast .ttime { font-size:0.95rem; color:#6b7280; margin-top:6px; }
+
+    .err {
+      position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+      background:#fef2f2; border:2px solid #dc2626; padding:24px 32px; border-radius:20px;
+      box-shadow:0 10px 40px rgba(0,0,0,0.4); z-index:200; text-align:center; max-width:340px;
+      display:none; color:#991b1b; font-weight:700;
+    }
+    .err button { margin-top:14px; padding:8px 18px; background:#dc2626; color:#fff; border:none; border-radius:6px; font-weight:700; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>⏰ 출퇴근 기록</h1>
+    <div>
+      <div class="clock" id="clock">--:--:--</div>
+      <div class="date" id="date">-</div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="card">
+      <div class="title">📷 QR 코드를 카메라에 비춰주세요</div>
+      <div class="sub">Scan your QR code / 扫描你的二维码</div>
+      <div id="qrReader"></div>
+      <button class="restart" onclick="restartScanner()">🔄 카메라 다시 시작</button>
+    </div>
+
+    <div class="manual">
+      <label>💡 QR이 안될 때: 사번 직접 입력</label>
+      <input type="text" id="manualEmpNo" placeholder="사번 입력 후 확인" inputmode="numeric">
+      <button onclick="submitManual()">확인</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="overlay">
+    <div class="modal">
+      <div class="mhead">
+        <div class="mname" id="mName">-</div>
+        <div class="minfo" id="mInfo">-</div>
+        <div class="mtime" id="mTime">-</div>
+      </div>
+      <div class="mbody">
+        <button class="bigbtn b-in"   onclick="submitAttend('출근')">🟢<br>출근</button>
+        <button class="bigbtn b-out"  onclick="submitAttend('퇴근')">🔴<br>퇴근</button>
+        <button class="bigbtn b-away" onclick="submitAttend('외출')">🟡 외출</button>
+      </div>
+      <button class="mcancel" onclick="closeModal()">취소</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <div class="err" id="err"></div>
+
+  <script>
+    // ===== 설정 (Apps Script 배포 URL + 공유키) =====
+    var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxHaLkXtiddu16PR1RPM-C8rpv25etkJNhczaPaHRx8NFMz-e2kpUjrcJV7tl9UGHCT/exec';
+    var TOKEN = 'KIOSK_87898cdd44c9e7a2f459379be74a5681';
+
+    var currentEmp = null, currentMode = 'QR';
+    var html5QrCode = null, scannerRunning = false;
+    var lastScan = '', lastScanTime = 0, toastTimer = null;
+
+    function updateClock() {
+      var now = new Date();
+      var p = function(n){ return String(n).padStart(2,'0'); };
+      document.getElementById('clock').innerText = p(now.getHours())+':'+p(now.getMinutes())+':'+p(now.getSeconds());
+      var days=['일','월','화','수','목','금','토'];
+      document.getElementById('date').innerText =
+        now.getFullYear()+'-'+p(now.getMonth()+1)+'-'+p(now.getDate())+' ('+days[now.getDay()]+')';
+    }
+    setInterval(updateClock,1000); updateClock();
+
+    function escapeHtml(s){ if(s==null)return''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+
+    // ===== 카메라 (전면 우선) =====
+    var scanConfig = { fps:10, qrbox:{width:240,height:240}, aspectRatio:1.0 };
+
+    function startScanner() {
+      if (scannerRunning) return;
+      html5QrCode = new Html5Qrcode("qrReader");
+      html5QrCode.start({ facingMode:"user" }, scanConfig,
+        function(t){ handleScan(t); }, function(){}
+      ).then(function(){ scannerRunning=true; })
+       .catch(function(){
+         html5QrCode.start({ facingMode:"environment" }, scanConfig,
+           function(t){ handleScan(t); }, function(){}
+         ).then(function(){ scannerRunning=true; })
+          .catch(function(e){ showErr('카메라를 시작할 수 없습니다.\n권한을 허용했는지 확인 후 [카메라 다시 시작]을 눌러주세요.\n\n'+e); });
+       });
+    }
+    function stopScanner() {
+      if (html5QrCode && scannerRunning) {
+        html5QrCode.stop().then(function(){ scannerRunning=false; }).catch(function(){});
+      }
+    }
+    function restartScanner() { stopScanner(); setTimeout(startScanner,300); }
+
+    function handleScan(text) {
+      var now = Date.now();
+      if (text===lastScan && (now-lastScanTime)<2000) return;
+      lastScan=text; lastScanTime=now;
+      currentMode='QR';
+      lookup(String(text).trim());
+    }
+    function submitManual() {
+      var v = document.getElementById('manualEmpNo').value.trim();
+      if (!v) { showErr('사번을 입력해주세요.'); return; }
+      currentMode='수동';
+      lookup(v);
+    }
+
+    // ===== 서버 통신 (fetch) =====
+    function callApi(payload, cb) {
+      fetch(SCRIPT_URL, {
+        method:'POST',
+        body: JSON.stringify(payload)
+      })
+      .then(function(r){ return r.json(); })
+      .then(function(res){ cb(res); })
+      .catch(function(e){ showErr('서버 연결 오류: '+e); });
+    }
+
+    function lookup(empNo) {
+      callApi({ token:TOKEN, action:'lookup', empNo:empNo }, function(res){
+        if (res && res.success) { currentEmp=res.employee; showModal(); }
+        else showErr(res && res.message ? res.message : '직원을 찾을 수 없습니다.');
+      });
+    }
+
+    function showModal() {
+      if (!currentEmp) return;
+      document.getElementById('mName').innerText = currentEmp.name;
+      document.getElementById('mInfo').innerText = currentEmp.sosok + (currentEmp.dept ? ' · '+currentEmp.dept : '');
+      var now=new Date(), p=function(n){return String(n).padStart(2,'0');};
+      document.getElementById('mTime').innerText = '현재 시각 '+p(now.getHours())+':'+p(now.getMinutes());
+      document.getElementById('manualEmpNo').value='';
+      document.getElementById('overlay').style.display='flex';
+    }
+    function closeModal() { document.getElementById('overlay').style.display='none'; currentEmp=null; }
+
+    function submitAttend(type) {
+      if (!currentEmp) return;
+      var empNo=currentEmp.empNo, mode=currentMode;
+      closeModal();
+      callApi({ token:TOKEN, action:'save', empNo:empNo, type:type, mode:mode }, function(res){
+        if (res && res.success) showToast(res.name, res.type, res.time, res.duplicated, res.message);
+        else showErr(res && res.message ? res.message : '저장 실패');
+      });
+    }
+
+    function showToast(name, type, time, dup, extra) {
+      hideAll();
+      var cls, icon, label;
+      if (type==='출근'){ cls='in'; icon='✅'; label='출근 완료'; }
+      else if (type==='퇴근'){ cls='out'; icon='👋'; label='퇴근 완료'; }
+      else { cls='away'; icon='🚶'; label='외출 기록'; }
+      if (dup) { icon='ℹ️'; label=extra||'이미 출근 기록이 있습니다.'; }
+      var t=document.getElementById('toast');
+      t.innerHTML='<div class="icon">'+icon+'</div><div class="tname">'+escapeHtml(name)+'</div>'
+        +'<div class="tmsg '+cls+'">'+escapeHtml(label)+'</div><div class="ttime">'+escapeHtml(time||'')+'</div>';
+      t.style.display='block';
+      toastTimer=setTimeout(function(){ t.style.display='none'; }, 2500);
+    }
+    function showErr(msg) {
+      hideAll();
+      var e=document.getElementById('err');
+      e.innerHTML='⚠️<br>'+escapeHtml(msg).replace(/\n/g,'<br>')
+        +'<br><button onclick="document.getElementById(\'err\').style.display=\'none\'">확인</button>';
+      e.style.display='block';
+    }
+    function hideAll() {
+      document.getElementById('toast').style.display='none';
+      document.getElementById('err').style.display='none';
+      if (toastTimer) clearTimeout(toastTimer);
+    }
+
+    window.onload = function(){ setTimeout(startScanner,500); };
+  </script>
+</body>
+</html>
