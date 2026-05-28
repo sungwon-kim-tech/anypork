@@ -161,17 +161,10 @@
     function escapeHtml(s){ if(s==null)return''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
     // ===== 카메라 (전면 전용) =====
-    // 스캔영역을 카메라 영상 거의 전체로 → 화면 어디든 일부만 걸쳐도 인식.
-    function qrboxFn(vw, vh) {
-      // 영상의 98% (아주 약간 여유를 둬야 일부 버전에서 시작 실패 안 함)
-      var w = Math.floor(vw * 0.98);
-      var h = Math.floor(vh * 0.98);
-      return { width: w, height: h };
-    }
-
+    // 스캔영역: 고정 크기 (함수형 qrbox가 이 기기에서 전환충돌 유발 → 숫자로)
     var scanConfig = {
-      fps: 15,
-      qrbox: qrboxFn,
+      fps: 10,
+      qrbox: 250,
       aspectRatio: 1.0,
       disableFlip: false
     };
@@ -181,23 +174,16 @@
       scannerBusy = true;
       if (!html5QrCode) html5QrCode = new Html5Qrcode("qrReader");
       html5QrCode.start(
-        { facingMode: "user", width:{ideal:1280}, height:{ideal:960} },
+        { facingMode: "user" },
         scanConfig,
-        function(t){ handleScan(t); }, function(){}
+        function(t){ handleScan(t); },
+        function(){}
       ).then(function(){
         scannerRunning = true;
         scannerBusy = false;
       }).catch(function(err){
-        setTimeout(function(){
-          html5QrCode.start({ facingMode:"user" }, scanConfig,
-            function(t){ handleScan(t); }, function(){}
-          ).then(function(){
-            scannerRunning = true; scannerBusy = false;
-          }).catch(function(err2){
-            scannerBusy = false;
-            showErr('카메라를 시작할 수 없습니다.\n권한 허용 후 [카메라 다시 시작]을 눌러주세요.\n\n'+(err2||err));
-          });
-        }, 600);
+        scannerBusy = false;
+        showErr('카메라를 시작할 수 없습니다.\n권한 허용 후 [카메라 다시 시작]을 눌러주세요.\n\n' + err);
       });
     }
     function stopScanner() {
