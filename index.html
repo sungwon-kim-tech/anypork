@@ -160,11 +160,11 @@
 
     function escapeHtml(s){ if(s==null)return''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
-    // ===== 카메라 (전면 우선) =====
-    // 인식을 너그럽게: 스캔영역(qrbox)을 화면 대부분으로 크게 잡아
-    // 꼭짓점을 정확히 안 맞춰도 인식되게 한다.
+    // ===== 카메라 (전면 전용) =====
+    // 전면 카메라만 사용. 폴백 없이 단일 호출 → "이미 전환 중" 충돌 방지.
+    // qrbox를 화면 대부분으로 크게 잡아 꼭짓점 정밀정렬 불필요.
     function qrboxFn(vw, vh) {
-      var size = Math.floor(Math.min(vw, vh) * 0.9); // 화면의 90%
+      var size = Math.floor(Math.min(vw, vh) * 0.9);
       if (size < 150) size = 150;
       return { width: size, height: size };
     }
@@ -178,26 +178,35 @@
 
     function startScanner() {
       if (scannerRunning) return;
-      html5QrCode = new Html5Qrcode("qrReader");
-      // 전면 카메라로 시작, 실패 시 후면으로 폴백
+      if (!html5QrCode) html5QrCode = new Html5Qrcode("qrReader");
       html5QrCode.start({ facingMode: "user" }, scanConfig,
         function(t){ handleScan(t); }, function(){}
-      ).then(function(){ scannerRunning = true; })
-       .catch(function(err1){
-         html5QrCode.start({ facingMode: "environment" }, scanConfig,
-           function(t){ handleScan(t); }, function(){}
-         ).then(function(){ scannerRunning = true; })
-          .catch(function(err2){
-            showErr('카메라를 시작할 수 없습니다.\n권한 허용 후 [카메라 다시 시작]을 눌러주세요.\n\n' + (err2 || err1));
-          });
-       });
+      ).then(function(){
+        scannerRunning = true;
+      }).catch(function(err){
+        showErr('카메라를 시작할 수 없습니다.\n권한을 허용했는지 확인 후 [카메라 다시 시작]을 눌러주세요.\n\n' + err);
+      });
     }
     function stopScanner() {
       if (html5QrCode && scannerRunning) {
-        html5QrCode.stop().then(function(){ scannerRunning=false; }).catch(function(){});
+        scannerRunning = false;
+        return html5QrCode.stop().catch(function(){});
+      }
+      return Promise.resolve();
+    }
+    // 다시 시작: 정지가 완전히 끝난 뒤에 시작 (전환 충돌 방지)
+    function restartScanner() {
+      if (html5QrCode && scannerRunning) {
+        scannerRunning = false;
+        html5QrCode.stop().then(function(){
+          setTimeout(startScanner, 400);
+        }).catch(function(){
+          setTimeout(startScanner, 400);
+        });
+      } else {
+        startScanner();
       }
     }
-    function restartScanner() { stopScanner(); setTimeout(startScanner,300); }
 
     function handleScan(text) {
       var now = Date.now();
