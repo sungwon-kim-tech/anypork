@@ -161,38 +161,34 @@
     function escapeHtml(s){ if(s==null)return''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
     // ===== 카메라 (전면 우선) =====
-    // 인식을 최대한 너그럽게:
-    //  - qrbox 미지정 → 화면 전체에서 QR 탐색 (작은 네모에 맞출 필요 없음)
-    //  - fps 높이고 네이티브 고속 디코더 우선, 고해상도 요청
-    //  - disableFlip:false → 좌우 반전된 QR도 인식
+    // 인식을 너그럽게: 스캔영역(qrbox)을 화면 대부분으로 크게 잡아
+    // 꼭짓점을 정확히 안 맞춰도 인식되게 한다.
+    function qrboxFn(vw, vh) {
+      var size = Math.floor(Math.min(vw, vh) * 0.9); // 화면의 90%
+      if (size < 150) size = 150;
+      return { width: size, height: size };
+    }
+
     var scanConfig = {
-      fps: 30,
+      fps: 20,
+      qrbox: qrboxFn,
       aspectRatio: 1.0,
-      disableFlip: false,
-      useBarCodeDetectorIfSupported: true,
-      experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+      disableFlip: false
     };
 
     function startScanner() {
       if (scannerRunning) return;
-      html5QrCode = new Html5Qrcode("qrReader", { useBarCodeDetectorIfSupported: true });
-      // videoConstraints로 전면 카메라 + 고해상도 시도
-      html5QrCode.start(
-        { facingMode: "user", width:{ideal:1280}, height:{ideal:720} },
-        scanConfig,
+      html5QrCode = new Html5Qrcode("qrReader");
+      // 전면 카메라로 시작, 실패 시 후면으로 폴백
+      html5QrCode.start({ facingMode: "user" }, scanConfig,
         function(t){ handleScan(t); }, function(){}
-      ).then(function(){ scannerRunning=true; })
-       .catch(function(){
-         // 고해상도 실패 시 기본 전면
-         html5QrCode.start({ facingMode:"user" }, { fps:30, disableFlip:false, useBarCodeDetectorIfSupported:true },
+      ).then(function(){ scannerRunning = true; })
+       .catch(function(err1){
+         html5QrCode.start({ facingMode: "environment" }, scanConfig,
            function(t){ handleScan(t); }, function(){}
-         ).then(function(){ scannerRunning=true; })
-          .catch(function(){
-            // 전면 안되면 후면
-            html5QrCode.start({ facingMode:"environment" }, { fps:30, disableFlip:false, useBarCodeDetectorIfSupported:true },
-              function(t){ handleScan(t); }, function(){}
-            ).then(function(){ scannerRunning=true; })
-             .catch(function(e){ showErr('카메라를 시작할 수 없습니다.\n권한 허용 후 [카메라 다시 시작]을 눌러주세요.\n\n'+e); });
+         ).then(function(){ scannerRunning = true; })
+          .catch(function(err2){
+            showErr('카메라를 시작할 수 없습니다.\n권한 허용 후 [카메라 다시 시작]을 눌러주세요.\n\n' + (err2 || err1));
           });
        });
     }
