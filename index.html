@@ -161,33 +161,16 @@
     function escapeHtml(s){ if(s==null)return''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
     // ===== 카메라 (전면 우선) =====
-    // 인식 속도/정확도 개선:
-    //  - 스캔박스를 화면에 맞춰 크게 (작으면 QR을 정확히 맞춰야 해서 느림)
-    //  - fps 최대, 네이티브 고속 디코더(BarcodeDetector) 우선
-    //  - 고해상도 카메라 요청 (전면 카메라 저화질 보완)
-    function buildQrboxFn() {
-      // 뷰포트에 맞춰 스캔영역을 크게 (가로/세로 중 작은 값의 70%, 최대 400)
-      return function(vw, vh) {
-        var m = Math.min(vw, vh);
-        var size = Math.floor(m * 0.7);
-        if (size > 400) size = 400;
-        if (size < 200) size = 200;
-        return { width: size, height: size };
-      };
-    }
-
+    // 인식을 최대한 너그럽게:
+    //  - qrbox 미지정 → 화면 전체에서 QR 탐색 (작은 네모에 맞출 필요 없음)
+    //  - fps 높이고 네이티브 고속 디코더 우선, 고해상도 요청
+    //  - disableFlip:false → 좌우 반전된 QR도 인식
     var scanConfig = {
       fps: 30,
-      qrbox: buildQrboxFn(),
       aspectRatio: 1.0,
       disableFlip: false,
       useBarCodeDetectorIfSupported: true,
-      experimentalFeatures: { useBarCodeDetectorIfSupported: true },
-      videoConstraints: {
-        facingMode: "user",
-        width: { ideal: 1280 },
-        height: { ideal: 720 }
-      }
+      experimentalFeatures: { useBarCodeDetectorIfSupported: true }
     };
 
     function startScanner() {
@@ -201,12 +184,12 @@
       ).then(function(){ scannerRunning=true; })
        .catch(function(){
          // 고해상도 실패 시 기본 전면
-         html5QrCode.start({ facingMode:"user" }, { fps:30, qrbox: buildQrboxFn(), useBarCodeDetectorIfSupported:true },
+         html5QrCode.start({ facingMode:"user" }, { fps:30, disableFlip:false, useBarCodeDetectorIfSupported:true },
            function(t){ handleScan(t); }, function(){}
          ).then(function(){ scannerRunning=true; })
           .catch(function(){
             // 전면 안되면 후면
-            html5QrCode.start({ facingMode:"environment" }, { fps:30, qrbox: buildQrboxFn(), useBarCodeDetectorIfSupported:true },
+            html5QrCode.start({ facingMode:"environment" }, { fps:30, disableFlip:false, useBarCodeDetectorIfSupported:true },
               function(t){ handleScan(t); }, function(){}
             ).then(function(){ scannerRunning=true; })
              .catch(function(e){ showErr('카메라를 시작할 수 없습니다.\n권한 허용 후 [카메라 다시 시작]을 눌러주세요.\n\n'+e); });
