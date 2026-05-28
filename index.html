@@ -205,29 +205,49 @@
       lookup(v);
     }
 
-    // ===== 서버 통신 =====
-    // Apps Script는 POST에 CORS 헤더를 안 주므로 브라우저가 막는다.
-    // GET 쿼리스트링 방식은 CORS 제약을 피해가므로 GET으로 호출한다.
+    // ===== 서버 통신 (JSONP) =====
+    // Apps Script는 fetch(GET/POST) 응답에 CORS 헤더를 안 주고 리다이렉트하므로
+    // 브라우저가 막는다. JSONP(<script> 태그)는 CORS 정책 대상이 아니라 통과된다.
+    var jsonpSeq = 0;
     function callApi(payload, cb) {
+      jsonpSeq++;
+      var cbName = 'jsonpCb_' + jsonpSeq + '_' + Date.now();
+      var timer = null;
+
+      window[cbName] = function(res) {
+        if (timer) clearTimeout(timer);
+        delete window[cbName];
+        var s = document.getElementById(cbName);
+        if (s && s.parentNode) s.parentNode.removeChild(s);
+        cb(res);
+      };
+
       var q = SCRIPT_URL + '?api=1'
+        + '&callback=' + cbName
         + '&token=' + encodeURIComponent(payload.token)
         + '&action=' + encodeURIComponent(payload.action)
         + '&empNo=' + encodeURIComponent(payload.empNo || '')
         + '&type=' + encodeURIComponent(payload.type || '')
         + '&mode=' + encodeURIComponent(payload.mode || '')
         + '&t=' + Date.now();
-      fetch(q, { method: 'GET', redirect: 'follow' })
-        .then(function(r){ return r.text(); })
-        .then(function(txt){
-          var res;
-          try { res = JSON.parse(txt); }
-          catch (e) { showErr('서버 응답 형식 오류:\n' + txt.substring(0,200)); return; }
-          cb(res);
-        })
-        .catch(function(e){
-          showErr('서버 연결 오류: ' + e
-                + '\n\nURL/배포 접근권한(모든 사용자)을 확인해주세요.');
-        });
+
+      var script = document.createElement('script');
+      script.id = cbName;
+      script.src = q;
+      script.onerror = function() {
+        if (timer) clearTimeout(timer);
+        delete window[cbName];
+        if (script.parentNode) script.parentNode.removeChild(script);
+        showErr('서버 연결 오류(JSONP).\nURL/배포 접근권한(모든 사용자)을 확인해주세요.');
+      };
+      document.body.appendChild(script);
+
+      // 8초 타임아웃
+      timer = setTimeout(function() {
+        delete window[cbName];
+        if (script.parentNode) script.parentNode.removeChild(script);
+        showErr('서버 응답이 없습니다(시간 초과).\n배포 접근권한을 확인해주세요.');
+      }, 8000);
     }
 
     function lookup(empNo) {
