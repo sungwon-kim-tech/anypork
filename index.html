@@ -161,11 +161,19 @@
     function escapeHtml(s){ if(s==null)return''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
     // ===== 카메라 (전면 우선) =====
-    var scanConfig = { fps:10, qrbox:{width:240,height:240}, aspectRatio:1.0 };
+    // fps 높이고 스캔박스 키워 인식 속도 개선.
+    // 기기에 BarcodeDetector(네이티브 고속 디코더) 있으면 우선 사용.
+    var scanConfig = {
+      fps: 25,
+      qrbox: { width: 280, height: 280 },
+      aspectRatio: 1.0,
+      useBarCodeDetectorIfSupported: true,
+      experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+    };
 
     function startScanner() {
       if (scannerRunning) return;
-      html5QrCode = new Html5Qrcode("qrReader");
+      html5QrCode = new Html5Qrcode("qrReader", { useBarCodeDetectorIfSupported: true });
       html5QrCode.start({ facingMode:"user" }, scanConfig,
         function(t){ handleScan(t); }, function(){}
       ).then(function(){ scannerRunning=true; })
@@ -197,24 +205,29 @@
       lookup(v);
     }
 
-    // ===== 서버 통신 (fetch) =====
-    // Apps Script는 CORS preflight를 처리 못하므로
-    // Content-Type을 text/plain으로 보내 preflight를 회피한다.
+    // ===== 서버 통신 =====
+    // Apps Script는 POST에 CORS 헤더를 안 주므로 브라우저가 막는다.
+    // GET 쿼리스트링 방식은 CORS 제약을 피해가므로 GET으로 호출한다.
     function callApi(payload, cb) {
-      fetch(SCRIPT_URL, {
-        method: 'POST',
-        redirect: 'follow',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(payload)
-      })
-      .then(function(r){ return r.text(); })
-      .then(function(txt){
-        var res;
-        try { res = JSON.parse(txt); }
-        catch (e) { showErr('서버 응답 형식 오류:\n' + txt.substring(0, 200)); return; }
-        cb(res);
-      })
-      .catch(function(e){ showErr('서버 연결 오류: ' + e); });
+      var q = SCRIPT_URL + '?api=1'
+        + '&token=' + encodeURIComponent(payload.token)
+        + '&action=' + encodeURIComponent(payload.action)
+        + '&empNo=' + encodeURIComponent(payload.empNo || '')
+        + '&type=' + encodeURIComponent(payload.type || '')
+        + '&mode=' + encodeURIComponent(payload.mode || '')
+        + '&t=' + Date.now();
+      fetch(q, { method: 'GET', redirect: 'follow' })
+        .then(function(r){ return r.text(); })
+        .then(function(txt){
+          var res;
+          try { res = JSON.parse(txt); }
+          catch (e) { showErr('서버 응답 형식 오류:\n' + txt.substring(0,200)); return; }
+          cb(res);
+        })
+        .catch(function(e){
+          showErr('서버 연결 오류: ' + e
+                + '\n\nURL/배포 접근권한(모든 사용자)을 확인해주세요.');
+        });
     }
 
     function lookup(empNo) {
