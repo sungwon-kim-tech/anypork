@@ -198,14 +198,23 @@
     }
 
     // ===== 서버 통신 (fetch) =====
+    // Apps Script는 CORS preflight를 처리 못하므로
+    // Content-Type을 text/plain으로 보내 preflight를 회피한다.
     function callApi(payload, cb) {
       fetch(SCRIPT_URL, {
-        method:'POST',
+        method: 'POST',
+        redirect: 'follow',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(payload)
       })
-      .then(function(r){ return r.json(); })
-      .then(function(res){ cb(res); })
-      .catch(function(e){ showErr('서버 연결 오류: '+e); });
+      .then(function(r){ return r.text(); })
+      .then(function(txt){
+        var res;
+        try { res = JSON.parse(txt); }
+        catch (e) { showErr('서버 응답 형식 오류:\n' + txt.substring(0, 200)); return; }
+        cb(res);
+      })
+      .catch(function(e){ showErr('서버 연결 오류: ' + e); });
     }
 
     function lookup(empNo) {
